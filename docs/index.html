@@ -103,6 +103,7 @@ tr:hover td{background:var(--surface2)}
     <button class="nav-btn active" onclick="showPage('dashboard',this)">儀表板</button>
     <button class="nav-btn" onclick="showPage('trades',this)">交易記錄</button>
     <button class="nav-btn" onclick="showPage('analytics',this)">深度分析</button>
+    <button class="nav-btn" onclick="showPage('monthly',this)">月報</button>
   </div>
 </header>
 
@@ -147,6 +148,15 @@ tr:hover td{background:var(--surface2)}
       <div class="section-title">TRADE_LOG — 交易記錄</div>
       <div class="table-wrap" id="trade-table"></div>
     </div>
+  </div>
+
+  <!-- ═══════ MONTHLY PAGE ═══════ -->
+  <div class="page" id="page-monthly">
+    <div class="section">
+      <div class="section-title">MONTHLY_REPORT — 月份績效報表</div>
+      <div class="grid3" id="monthly-summary"></div>
+    </div>
+    <div id="monthly-detail"></div>
   </div>
 
   <!-- ═══════ ANALYTICS PAGE ═══════ -->
@@ -347,7 +357,7 @@ fetch('data.json')
 
     // ── Trade stats ────────────────────────────────────────────────────────
     const holdCount=TR.filter(t=>!t.sell_date||t.sell_date==='').length;
-    const allPnl=TR.filter(t=>t.pnl!==0).map(t=>t.pnl);
+    const allPnl=TR.filter(t=>t.sell_date&&t.sell_date!=='').map(t=>t.pnl);
     const tradeStats=[
       {label:'TOTAL_TRADES',value:M.total_trades,sub:'已關倉'},
       {label:'HOLDING',value:holdCount,sub:'持倉中'},
@@ -391,8 +401,8 @@ fetch('data.json')
       <td style="font-family:var(--mono);font-size:12px">${fmt(t.qty)}</td>
       <td style="font-family:var(--mono);font-size:12px">${fmt(t.buy_price,2)}</td>
       <td style="font-family:var(--mono);font-size:12px">${t.sell_price?fmt(t.sell_price,2):'—'}</td>
-      <td style="font-family:var(--mono);font-size:13px;font-weight:700;color:${bc}">${t.pnl?(t.pnl>=0?'+':'')+fmt(t.pnl,0):'—'}</td>
-      <td style="font-family:var(--mono);font-size:12px;color:${bc}">${t.ret?(t.ret>=0?'+':'')+fmtPct(t.ret):'—'}</td>
+      <td style="font-family:var(--mono);font-size:13px;font-weight:700;color:${bc}">${(t.sell_date&&t.sell_date!=='')?((t.pnl>=0?'+':'')+fmt(t.pnl,0)):'—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:${bc}">${(t.sell_date&&t.sell_date!==''&&t.ret!==0)?((t.ret>=0?'+':'')+fmtPct(t.ret)):'—'}</td>
       <td><span class="badge ${(t.sell_date&&t.sell_date!=='')?'badge-sold':'badge-hold'}">${(t.sell_date&&t.sell_date!=='')?'已賣出':'持有'}</span></td>
     </tr>`;
   }).join('')}
@@ -444,7 +454,7 @@ fetch('data.json')
     });
 
     // ── PnL Distribution Chart ─────────────────────────────────────────────
-    const closedTrades=TR.filter(t=>t.sell_date&&t.sell_date!==''&&t.pnl);
+    const closedTrades=TR.filter(t=>t.sell_date&&t.sell_date!=='');
     const pnlVals=closedTrades.map(t=>t.pnl);
     const tradeLabels=closedTrades.map(t=>t.ticker+' '+t.name);
     const pnlBarColors=pnlVals.map(v=>v>=0?'rgba(26,92,58,0.75)':'rgba(139,26,26,0.75)');
@@ -460,6 +470,96 @@ fetch('data.json')
         }
       }
     });
+
+    // ── Monthly Page ──────────────────────────────────────────────────────
+    const eqByMonth={};
+    EQ.forEach(e=>{const mk=e.date.substring(0,7);if(!eqByMonth[mk]||e.date>eqByMonth[mk].date)eqByMonth[mk]=e;});
+    const mKeys=Object.keys(eqByMonth).sort();
+    let activeCard=null;
+
+    const monthlyGrid=document.getElementById('monthly-summary');
+    [...mKeys].reverse().forEach((mk,i,arr)=>{
+      const last=eqByMonth[mk];
+      const prevMk=arr[i+1];
+      const prevLast=prevMk?eqByMonth[prevMk]:null;
+      const monthRealized=last.cum_realized-(prevLast?prevLast.cum_realized:0);
+      const unrealized=last.unrealized;
+      const total=monthRealized+unrealized;
+      const realizedTrades=TR.filter(t=>t.sell_date&&t.sell_date.startsWith(mk));
+      const openTrades=TR.filter(t=>t.buy_date<=last.date&&(!t.sell_date||t.sell_date>last.date));
+      const card=document.createElement('div');
+      card.className='section';
+      card.style.cssText='cursor:pointer;transition:border 0.15s;';
+      card.innerHTML=`
+        <div class="section-title" style="margin-bottom:12px">${mk} <span style="font-size:9px;font-weight:400;color:var(--text3)">截至 ${last.date}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">REALIZED</div>
+            <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${monthRealized>=0?'var(--green)':'var(--red)'}">${(monthRealized>=0?'+':'')+fmt(monthRealized)}</div>
+          </div>
+          <div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">UNREALIZED</div>
+            <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:${unrealized>=0?'var(--green)':'var(--red)'}">${(unrealized>=0?'+':'')+fmt(unrealized)}</div>
+          </div>
+          <div style="grid-column:1/-1">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:0.1em;margin-bottom:2px">TOTAL MTD</div>
+            <div style="font-family:var(--mono);font-size:19px;font-weight:700;color:${total>=0?'var(--green)':'var(--red)'}">${(total>=0?'+':'')+fmt(total)}</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">持倉 ${openTrades.length} 檔｜本月平倉 ${realizedTrades.length} 筆 ▾</div>`;
+      card.onclick=()=>{
+        if(activeCard){activeCard.style.borderColor='var(--border)';}
+        card.style.borderColor='var(--navy)';
+        activeCard=card;
+        renderMonthDetail(mk,last,monthRealized,unrealized,realizedTrades,openTrades);
+      };
+      monthlyGrid.appendChild(card);
+    });
+
+    function renderMonthDetail(mk,last,monthRealized,unrealized,realizedTrades,openTrades){
+      const thStyle='text-align:left;padding:9px 12px;font-family:var(--mono);font-size:10px;letter-spacing:0.08em;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap';
+      const realizedRows=realizedTrades.length>0?realizedTrades.map(t=>{
+        const bc=t.pnl>0?'var(--green)':t.pnl<0?'var(--red)':'var(--text2)';
+        return `<tr>
+          <td style="padding:9px 12px;font-family:var(--mono);font-weight:700;font-size:13px">${t.ticker}</td>
+          <td style="padding:9px 12px">${t.name||'—'}</td>
+          <td style="padding:9px 12px"><span class="tag">${t.market||'—'}</span></td>
+          <td style="padding:9px 12px;font-family:var(--mono);font-size:12px">${t.buy_date}</td>
+          <td style="padding:9px 12px;font-family:var(--mono);font-size:12px">${t.sell_date}</td>
+          <td style="padding:9px 12px;font-family:var(--mono);font-size:13px;font-weight:700;color:${bc}">${(t.sell_date&&t.sell_date!=='')?((t.pnl>=0?'+':'')+fmt(t.pnl)):'—'}</td>
+          <td style="padding:9px 12px;font-family:var(--mono);font-size:12px;color:${bc}">${(t.sell_date&&t.sell_date!==''&&t.ret!==0)?((t.ret>=0?'+':'')+fmtPct(t.ret)):'—'}</td>
+        </tr>`;
+      }).join(''):`<tr><td colspan="7" style="padding:16px;color:var(--text3);text-align:center;font-size:12px">本月無已實現交易</td></tr>`;
+
+      const openRows=openTrades.length>0?openTrades.map(t=>`<tr>
+        <td style="padding:9px 12px;font-family:var(--mono);font-weight:700;font-size:13px">${t.ticker}</td>
+        <td style="padding:9px 12px">${t.name||'—'}</td>
+        <td style="padding:9px 12px"><span class="tag">${t.market||'—'}</span></td>
+        <td style="padding:9px 12px;font-family:var(--mono);font-size:12px">${t.buy_date}</td>
+        <td style="padding:9px 12px;font-family:var(--mono);font-size:12px">${fmt(t.buy_price,2)}</td>
+        <td style="padding:9px 12px;font-family:var(--mono);font-size:12px">${fmt(t.qty)}</td>
+      </tr>`).join(''):`<tr><td colspan="6" style="padding:16px;color:var(--text3);text-align:center;font-size:12px">截至月底無持倉</td></tr>`;
+
+      document.getElementById('monthly-detail').innerHTML=`
+<div class="section" style="margin-top:0">
+  <div class="section-title">${mk} 月份明細</div>
+  <div style="margin-bottom:20px">
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--text3);margin-bottom:10px">REALIZED — 本月已平倉 ${realizedTrades.length} 筆</div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th style="${thStyle}">代號</th><th style="${thStyle}">名稱</th><th style="${thStyle}">市場</th><th style="${thStyle}">買進日</th><th style="${thStyle}">賣出日</th><th style="${thStyle}">損益 NT$</th><th style="${thStyle}">報酬率</th></tr></thead>
+      <tbody>${realizedRows}</tbody>
+    </table></div>
+  </div>
+  <div>
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--text3);margin-bottom:10px">UNREALIZED — 截至 ${last.date} 持有中 ${openTrades.length} 檔｜合計 <span style="color:${unrealized>=0?'var(--green)':'var(--red)'}">${(unrealized>=0?'+':'')+fmt(unrealized)} NT$</span></div>
+    <div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th style="${thStyle}">代號</th><th style="${thStyle}">名稱</th><th style="${thStyle}">市場</th><th style="${thStyle}">買進日</th><th style="${thStyle}">買進價</th><th style="${thStyle}">股數</th></tr></thead>
+      <tbody>${openRows}</tbody>
+    </table></div>
+  </div>
+</div>`;
+      document.getElementById('monthly-detail').scrollIntoView({behavior:'smooth',block:'start'});
+    }
 
     // ── Full metrics detail ────────────────────────────────────────────────
     const metricsDetail=[
