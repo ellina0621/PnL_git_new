@@ -462,6 +462,74 @@ def main() -> None:
     autofit_columns(summary_ws)
     autofit_columns(detail_ws)
 
+    # ── 持倉MTM sheet ──────────────────────────────────────────────────────
+    remove_sheet_if_exists(wb, "持倉MTM")
+    mtm_ws = wb.create_sheet("持倉MTM")
+    latest_date = calendar[-1]
+    mtm_ws["A1"] = "持倉MTM — 各部位最新未實現損益"
+    mtm_ws["A1"].font = Font(bold=True, size=14)
+    mtm_ws["A2"] = f"基準日期：{latest_date.isoformat()}（各股依可得最新收盤價計算）"
+    mtm_ws.append([])
+    mtm_ws.append([
+        "交易ID", "代號", "名稱", "市場", "產業",
+        "買進日", "持有天數", "股數", "買進均價", "買進成本",
+        "最新收盤價", "收盤價日期", "持倉市值",
+        "未實現損益", "未實現報酬率",
+    ])
+    style_header(mtm_ws, 4)
+
+    open_now = [
+        t for t in trades
+        if t.buy_date <= latest_date and (t.sell_date is None or t.sell_date > latest_date)
+    ]
+    total_unrealized = 0.0
+    for t in open_now:
+        series = closes.get(t.code, {})
+        close_px, close_dt = price_as_of(series, latest_date)
+        if close_px is None:
+            close_px, close_dt = t.buy_px, t.buy_date
+        mkt_val = t.shares * close_px
+        unreal = mkt_val - t.buy_cost
+        ret_pct = unreal / t.buy_cost if t.buy_cost else 0.0
+        hold_days = (latest_date - t.buy_date).days
+        total_unrealized += unreal
+        mtm_ws.append([
+            t.trade_id, t.code, t.name, t.market, t.industry,
+            t.buy_date, hold_days, t.shares, t.buy_px, t.buy_cost,
+            close_px, close_dt, mkt_val, unreal, ret_pct,
+        ])
+
+    # 合計列
+    mtm_ws.append([])
+    total_row = mtm_ws.max_row + 1
+    mtm_ws.cell(total_row, 1, "合計")
+    mtm_ws.cell(total_row, 1).font = Font(bold=True)
+    mtm_ws.cell(total_row, 14, total_unrealized)
+    mtm_ws.cell(total_row, 14).number_format = money_fmt
+    mtm_ws.cell(total_row, 14).font = Font(
+        bold=True,
+        color="1A5C3A" if total_unrealized >= 0 else "8B1A1A",
+    )
+
+    # 格式化
+    green_font = Font(color="1A5C3A", bold=True)
+    red_font   = Font(color="8B1A1A", bold=True)
+    for row in mtm_ws.iter_rows(min_row=5, max_row=mtm_ws.max_row - 2):
+        row[5].number_format  = date_fmt          # 買進日
+        row[11].number_format = date_fmt           # 收盤價日期
+        row[6].number_format  = '#,##0'            # 持有天數
+        row[7].number_format  = '#,##0.####'       # 股數
+        for idx in [8, 9, 10, 12]:
+            row[idx].number_format = money_fmt
+        row[13].number_format = money_fmt          # 未實現損益
+        row[14].number_format = '0.00%'            # 報酬率
+        val = row[13].value or 0
+        row[13].font = green_font if val > 0 else (red_font if val < 0 else Font())
+        row[14].font = green_font if val > 0 else (red_font if val < 0 else Font())
+
+    mtm_ws.freeze_panes = "A5"
+    autofit_columns(mtm_ws)
+
     wb.save(OUTPUT_FILE)
     print(f"Wrote {OUTPUT_FILE}")
     print(f"Summary rows: {summary_ws.max_row - 5}")
