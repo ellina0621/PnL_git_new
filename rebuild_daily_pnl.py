@@ -467,6 +467,10 @@ def main() -> None:
     print(f"Summary rows: {summary_ws.max_row - 5}")
     print(f"Detail rows: {detail_ws.max_row - 4}")
 
+    import export_json
+    print("\n--- 自動執行 export_json ---")
+    export_json.main()
+
 
 if __name__ == "__main__":
     main()
