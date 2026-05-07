@@ -19,8 +19,9 @@ from typing import Optional
 
 import openpyxl
 
-INPUT_FILE = Path("trading-journal (2) - 每日損益重算.xlsx")
-OUTPUT_JSON = Path("docs/data.json")
+INPUT_FILE       = Path("trading-journal (2) - 每日損益重算.xlsx")
+INPUT_FILE_ORIG  = Path("trading-journal (2).xlsx")   # 交易記錄公式快取在這
+OUTPUT_JSON      = Path("docs/data.json")
 CAPITAL = 100_000.0
 RF_ANNUAL = 0.017          # 無風險利率（年）
 RF_DAILY  = RF_ANNUAL / 252
@@ -234,10 +235,15 @@ def main() -> None:
 
     print(f"讀取 {INPUT_FILE} …")
     wb = openpyxl.load_workbook(INPUT_FILE, read_only=True, data_only=True)
-
     equity_rows = read_equity(wb)
-    trades      = read_trades(wb)
     wb.close()
+
+    # 交易記錄從原始 Excel 讀（公式快取保留 name/market/industry）
+    src = INPUT_FILE_ORIG if INPUT_FILE_ORIG.exists() else INPUT_FILE
+    print(f"讀取交易記錄 from {src} …")
+    wb2 = openpyxl.load_workbook(src, read_only=True, data_only=True)
+    trades = read_trades(wb2)
+    wb2.close()
 
     print(f"  equity 資料：{len(equity_rows)} 列")
     print(f"  交易記錄：{len(trades)} 筆（含持倉）")
