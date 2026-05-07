@@ -1,0 +1,39 @@
+col 1: []
+col 2: []
+col 3: []
+col 4: []
+col 5: []
+col 6: []
+col 7: []
+col 8: []
+col 9: []
+col 10: []
+col 11: []
+col 12: []
+col 13: []
+col 14: []
+col 15: []
+col 16: []
+col 17: []
+col 18: []
+col 19: []
+--- row 3 ---
+  col 1: 1
+  col 2: 2467
+  col 3: '志聖'
+  col 4: 'TSE'
+  col 5: '電子零組件'
+  col 6: datetime.datetime(2025, 12, 24, 0, 0)
+  col 7: datetime.datetime(2026, 1, 2, 0, 0)
+  col 8: '已賣出'
+  col 9: 105
+  col 10: 236
+  col 11: 264
+  col 12: 4
+  col 13: 19
+  col 14: 2917
+  col 15: 0.1176969012265978
+  col 16: 9
+  col 17: None
+  col 18: None
+  col 19: None

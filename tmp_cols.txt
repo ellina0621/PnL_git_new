@@ -1,0 +1,7 @@
+col 1: 證券代碼 | 000116 日盛證券 | 000930 華南永昌證券
+col 2: 上市別 | UNPUB | PUB
+col 3: 證期會代碼 | 116 | 930
+col 4: 公司中文簡稱 | 日盛證券 | 華南永昌證券
+col 5: TSE產業_名稱 | 金融業 | 金融業
+col 6: None | None | None
+col 7: None | None | None
