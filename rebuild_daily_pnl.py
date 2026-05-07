@@ -22,6 +22,10 @@ INITIAL_CAPITAL = 100000.0
 # - 7828 創新服務：Goodinfo 2026/04/15 歷史股價頁面
 # 其中 7828 在 2026/04/16 找不到同日收盤，以下一交易日前最後可得收盤價 1325 承接。
 SUPPLEMENTAL_CLOSES: Dict[int, Dict[date, float]] = {
+    7610: {
+        date(2026, 5, 6): 690.0,
+        date(2026, 5, 7): 759.0,
+    },
     3585: {
         date(2026, 4, 13): 30.1,
         date(2026, 4, 14): 49.2,
@@ -230,15 +234,16 @@ def main() -> None:
         | event_dates
     )
 
-    missing_codes = sorted(
-        {
-            trade.code
-            for trade in trades
-            if trade.code not in closes
-        }
-    )
-    if missing_codes:
-        raise ValueError(f"Missing close series for codes: {missing_codes}")
+    for trade in trades:
+        if trade.code not in closes:
+            entry: Dict[date, float] = {trade.buy_date: trade.buy_px}
+            if trade.sell_date and trade.sell_px:
+                entry[trade.sell_date] = trade.sell_px
+            closes.setdefault(trade.code, {}).update(entry)
+            print(
+                f"[WARN] {trade.code} ({trade.name}) 在收盤價 sheet 找不到資料，"
+                f"改用買進{'／賣出' if trade.sell_px else ''}價估算，損益僅供參考"
+            )
 
     wb = load_workbook(INPUT_FILE)
     remove_sheet_if_exists(wb, "每日損益重算")
