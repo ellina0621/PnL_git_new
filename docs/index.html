@@ -113,6 +113,7 @@ tr:hover td{background:var(--surface2)}
   <!-- ═══════ DASHBOARD PAGE ═══════ -->
   <div class="page" id="page-dashboard">
     <div class="metrics-grid" id="metrics-top"></div>
+    <div class="metrics-grid" id="metrics-period" style="grid-template-columns:repeat(3,1fr)"></div>
     <div class="section">
       <div class="section-title">EQUITY_CURVE — 權益曲線</div>
       <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
@@ -125,6 +126,16 @@ tr:hover td{background:var(--surface2)}
       <div class="section">
         <div class="section-title">DRAWDOWN — 回撤曲線</div>
         <div class="chart-wrap" style="height:200px"><canvas id="drawdownChart"></canvas></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="section">
+        <div class="section-title">RECENT_DTD — 近五日損益</div>
+        <div id="dtd-table"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">MONTHLY_MTD — 每月損益</div>
+        <div class="chart-wrap" style="height:200px"><canvas id="monthlyMtdChart"></canvas></div>
       </div>
     </div>
   </div>
@@ -254,6 +265,72 @@ fetch('data.json')
         scales:{
           x:{display:false},
           y:{grid:{color:'rgba(26,45,90,0.05)'},ticks:{color:'#8A99BB',font:{family:'Space Mono',size:10},callback:v=>v.toFixed(1)+'%'}},
+        }
+      }
+    });
+
+    // ── Period Metrics: YTD / MTD / DTD ──────────────────────────────────
+    const now=new Date();
+    const curYear=now.getFullYear();
+    const curMonth=now.getMonth()+1;
+    const curMonthStr=curYear+'-'+String(curMonth).padStart(2,'0');
+
+    const ytdPnl=EQ.filter(e=>new Date(e.date).getFullYear()===curYear)
+      .reduce((s,e)=>s+e.daily_change,0);
+    const mtdPnl=EQ.filter(e=>e.date.startsWith(curMonthStr))
+      .reduce((s,e)=>s+e.daily_change,0);
+    const latestEntry=EQ[EQ.length-1];
+    const dtdPnl=latestEntry?latestEntry.daily_change:0;
+    const dtdDate=latestEntry?latestEntry.date:'';
+
+    const periodMetrics=[
+      {label:'YTD_PNL',value:(ytdPnl>=0?'+':'')+fmt(ytdPnl)+' NT$',sub:curYear+' 年損益',pos:ytdPnl>=0,highlight:true},
+      {label:'MTD_PNL',value:(mtdPnl>=0?'+':'')+fmt(mtdPnl)+' NT$',sub:curMonthStr+' 月損益',pos:mtdPnl>=0,highlight:false},
+      {label:'DTD_PNL',value:(dtdPnl>=0?'+':'')+fmt(dtdPnl)+' NT$',sub:dtdDate+' 日損益',pos:dtdPnl>=0,highlight:false},
+    ];
+    const periodEl=document.getElementById('metrics-period');
+    periodMetrics.forEach(m=>{
+      const c=document.createElement('div');
+      c.className='metric-card'+(m.highlight?' highlight':'');
+      const valColor=m.highlight?'':` style="color:${m.pos?'var(--green)':'var(--red)'}"`;
+      c.innerHTML=`<div class="metric-label">${m.label}</div><div class="metric-value"${valColor}>${m.value}</div><div class="metric-sub">${m.sub}</div>`;
+      periodEl.appendChild(c);
+    });
+
+    // ── Recent 5 days DTD table ────────────────────────────────────────────
+    const last5=EQ.slice(-5).reverse();
+    document.getElementById('dtd-table').innerHTML=`<table>
+  <thead><tr><th>日期</th><th>日損益 NT$</th><th>持倉數</th></tr></thead>
+  <tbody>
+  ${last5.map(e=>{
+    const bc=e.daily_change>=0?'var(--green)':'var(--red)';
+    return `<tr>
+      <td style="font-family:var(--mono);font-size:12px">${e.date}</td>
+      <td style="font-family:var(--mono);font-size:13px;font-weight:700;color:${bc}">${(e.daily_change>=0?'+':'')+fmt(e.daily_change)} NT$</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text3)">${e.num_positions}</td>
+    </tr>`;
+  }).join('')}
+  </tbody>
+</table>`;
+
+    // ── Monthly MTD chart ─────────────────────────────────────────────────
+    const monthlyMap={};
+    EQ.forEach(e=>{
+      const mk=e.date.substring(0,7);
+      monthlyMap[mk]=(monthlyMap[mk]||0)+e.daily_change;
+    });
+    const monthKeys=Object.keys(monthlyMap).sort();
+    const monthVals=monthKeys.map(k=>Math.round(monthlyMap[k]*100)/100);
+    const monthColors=monthVals.map(v=>v>=0?'rgba(26,92,58,0.75)':'rgba(139,26,26,0.75)');
+    new Chart(document.getElementById('monthlyMtdChart'),{
+      type:'bar',
+      data:{labels:monthKeys.map(k=>k.replace('-','/')),datasets:[{data:monthVals,backgroundColor:monthColors,borderRadius:4}]},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' NT$'+(ctx.raw>=0?'+':'')+fmt(ctx.raw)}}},
+        scales:{
+          x:{ticks:{color:'#4A5D8A',font:{family:'Space Mono',size:10}}},
+          y:{grid:{color:'rgba(26,45,90,0.05)'},ticks:{color:'#8A99BB',font:{family:'Space Mono',size:10},callback:v=>(v>=0?'+':'')+fmt(v)}},
         }
       }
     });
