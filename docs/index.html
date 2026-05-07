@@ -275,10 +275,20 @@ fetch('data.json')
     const curMonth=now.getMonth()+1;
     const curMonthStr=curYear+'-'+String(curMonth).padStart(2,'0');
 
-    const ytdPnl=EQ.filter(e=>new Date(e.date).getFullYear()===curYear)
-      .reduce((s,e)=>s+e.daily_change,0);
-    const mtdPnl=EQ.filter(e=>e.date.startsWith(curMonthStr))
-      .reduce((s,e)=>s+e.daily_change,0);
+    // YTD: 今年第一筆交易日前的最後權益 → 最新權益
+    const prevYearEntries=EQ.filter(e=>new Date(e.date).getFullYear()<curYear);
+    const ytdBaseEquity=prevYearEntries.length>0?prevYearEntries[prevYearEntries.length-1].equity:CAPITAL;
+    const curYearEntries=EQ.filter(e=>new Date(e.date).getFullYear()===curYear);
+    const ytdLatestEquity=curYearEntries.length>0?curYearEntries[curYearEntries.length-1].equity:ytdBaseEquity;
+    const ytdPnl=ytdLatestEquity-ytdBaseEquity;
+
+    // MTD: 上月底最後一筆權益 → 本月最新權益
+    const prevMonthEntries=EQ.filter(e=>{const d=new Date(e.date);return d.getFullYear()<curYear||(d.getFullYear()===curYear&&d.getMonth()+1<curMonth);});
+    const mtdBaseEquity=prevMonthEntries.length>0?prevMonthEntries[prevMonthEntries.length-1].equity:CAPITAL;
+    const curMonthEntries=EQ.filter(e=>e.date.startsWith(curMonthStr));
+    const mtdLatestEquity=curMonthEntries.length>0?curMonthEntries[curMonthEntries.length-1].equity:mtdBaseEquity;
+    const mtdPnl=mtdLatestEquity-mtdBaseEquity;
+
     const latestEntry=EQ[EQ.length-1];
     const dtdPnl=latestEntry?latestEntry.daily_change:0;
     const dtdDate=latestEntry?latestEntry.date:'';
