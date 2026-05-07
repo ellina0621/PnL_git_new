@@ -93,8 +93,29 @@ def read_trades(wb) -> list[dict]:
         sell_date = as_date(row[6])
         days = (sell_date - buy_date).days if sell_date and buy_date else 0
 
-        pnl = row[13]   # 已實現損益（None = 尚未實現）
-        ret = row[14]   # 報酬率%（decimal，如 0.1177）
+        qty_v      = as_float(row[8])
+        buy_px_v   = as_float(row[9])
+        sell_px_v  = as_float(row[10]) if row[10] not in (None, "") else 0.0
+        buy_fee_v  = as_float(row[11])
+        sell_fee_v = as_float(row[12])
+        pnl_raw    = row[13]
+        ret_raw    = row[14]
+
+        # 優先用 Excel 填寫值；若為空或 0 且已賣出，則從價格倒推
+        if pnl_raw not in (None, "") and as_float(pnl_raw) != 0.0:
+            computed_pnl = rnd(as_float(pnl_raw))
+        elif sell_px_v > 0 and buy_px_v > 0 and qty_v > 0:
+            computed_pnl = rnd((sell_px_v - buy_px_v) * qty_v - buy_fee_v - sell_fee_v)
+        else:
+            computed_pnl = 0.0
+
+        if ret_raw not in (None, "") and as_float(ret_raw) != 0.0:
+            computed_ret = rnd(as_float(ret_raw), 4)
+        elif computed_pnl != 0.0 and buy_px_v > 0 and qty_v > 0:
+            cost = buy_px_v * qty_v + buy_fee_v
+            computed_ret = rnd(computed_pnl / cost, 4)
+        else:
+            computed_ret = 0.0
 
         trades.append({
             "ticker":     ticker,
@@ -104,13 +125,13 @@ def read_trades(wb) -> list[dict]:
             "buy_date":   buy_date.isoformat()  if buy_date  else "",
             "sell_date":  sell_date.isoformat() if sell_date else "",
             "status":     str(row[7] or ""),
-            "qty":        as_float(row[8]),
-            "buy_price":  rnd(as_float(row[9]),  4),
-            "sell_price": rnd(as_float(row[10]), 4) if row[10] not in (None, "") else 0.0,
-            "buy_fee":    as_float(row[11]),
-            "sell_fee":   as_float(row[12]),
-            "pnl":        rnd(as_float(pnl)) if pnl not in (None, "") else 0.0,
-            "ret":        rnd(as_float(ret), 4) if ret not in (None, "") else 0.0,
+            "qty":        qty_v,
+            "buy_price":  rnd(buy_px_v, 4),
+            "sell_price": rnd(sell_px_v, 4),
+            "buy_fee":    buy_fee_v,
+            "sell_fee":   sell_fee_v,
+            "pnl":        computed_pnl,
+            "ret":        computed_ret,
             "days":       days,
             "note":       str(row[16] or ""),
         })
@@ -168,7 +189,7 @@ def calc_metrics(equity_rows: list[dict], trades: list[dict]) -> dict:
             mdd = dd
 
     # 交易統計（僅計算已平倉且有 pnl 的筆數）
-    closed = [t for t in trades if t["sell_date"] and t["pnl"] != 0.0]
+    closed = [t for t in trades if t["sell_date"] and t["sell_date"] != ""]
     wins   = [t for t in closed if t["pnl"] > 0]
     losses = [t for t in closed if t["pnl"] < 0]
 
